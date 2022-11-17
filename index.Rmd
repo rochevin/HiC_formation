@@ -1539,7 +1539,7 @@ Arnould, Rocher et al., Nature, 2021
   * `Miseq_HiC_DIVA.dedup`
   * `Miseq_HiC_OHT.dedup`
 
-Get the whole dataset [here](https://cloud.biotoul.fr/index.php/s/q2nQoG3TQfq5FCR).
+Get the whole dataset [here](https://cloud.biotoul.fr/index.php/s/HxoQt8oYiy4YSog).
 
 ---
 ## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Subset Hi-C data

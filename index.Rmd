@@ -33,6 +33,7 @@ library(Matrix)
 library(GenomicRanges)
 library(HiTC)
 library(patchwork)
+knitr::opts_chunk$set(dev = 'svg', warning = FALSE, message = FALSE) # set output device to svg
 ```
 
 
@@ -1478,6 +1479,782 @@ Many tools offer APA implementation :
 * `HiCExplorer` with `hicAggregateContacts`: (`BED`)
   `hicAggregateContacts --matrix inter.h5 --BED TADs.bed`
 
+
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` __Training__ : 3D conformation analysis with Hi-C data
+
+.center[
+```{r out.width = '80%',echo=F}
+knitr::include_graphics("imgs/HiC_landscape.svg")
+```
+]
+
+
+---
+layout: false
+## Legube's lab: Lignée cellulaire DIvA
+
+.center[
+```{r out.width = '75%',echo=F,fig.cap="Iacovoni, Jason S., et al. The EMBO journal, 2010."}
+knitr::include_graphics("imgs/DIVA_2_eng_tc.svg")
+```
+]
+
+<!-- --- -->
+
+<!-- ### Data from: Loop extrusion as a mechanism for formation of DNA damage repair foci -->
+
+<!-- Arnould, Rocher et al., Nature, 2021 -->
+
+<!-- .center[ -->
+<!-- ```{r, include = TRUE,out.width = '80%',echo=F} -->
+
+<!-- knitr::include_graphics("imgs/Average_hic1.svg") -->
+
+<!-- ``` -->
+<!-- ] -->
+
+---
+
+### Data from: Loop extrusion as a mechanism for formation of DNA damage repair foci
+
+Arnould, Rocher et al., Nature, 2021
+
+* __Generation of Hi-C data at high-resolution (500m reads pairs)__:
+  * for two conditions: before (DiVA) and after breaks (OHT).
+  * for two replicates.
+* __Generation of Hi-C data with `Miseq` to test library__ (low res ~3m reads pairs).
+  
+#### Here we will work on a subset of `chr17` for the high-resolution experiment AND with the `Miseq` experiment :
+
+* Full experiment: 
+  * `HiC-manipA_DIVA.dedup`
+  *  `HiC-manipA_OHT.dedup` 
+* Subset `chr17`: 
+  * `HiC-manipA_DIvA_chr17`  
+  * `HiC-manipA_OHT_chr17`
+* `Miseq` dataset:
+  * `Miseq_HiC_DIVA.dedup`
+  * `Miseq_HiC_OHT.dedup`
+
+Get the whole dataset [here](https://cloud.biotoul.fr/index.php/s/q2nQoG3TQfq5FCR).
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Subset Hi-C data
+
+#### Use `pairtools select` to get interaction pairs only from chr17 (cis interactions)
+
+```bash
+pairtools select --nproc-in 12 --nproc-out 12 '(chrom1=="chr17") and (chrom2=="chr17")' HiC-manipA_DIVA.dedup.pairs > HiC-manipA_DIVA_chr17.pairs
+```
+
+#### `.hic` generation with `juicertools pre`
+
+
+```bash
+java -Djava.awt.headless=true -Ddevelopment=false -jar juicer_tools_1.22.01.jar pre -r 2500000,1000000,500000,250000,100000,50000,25000,10000,5000,1000 -k VC,VC_SQRT,KR,SCALE --threads 24 HiC-manipA_DIvA_chr17.dedups.pairs HiC-manipA_DIvA_chr17.hic chrom.size
+```
+
+#### `.cool` generation with `cooler cload`
+
+```bash
+bgzip --threads 12 -c HiC-manipA_DIvA_chr17.dedups.pairs > HiC-manipA_DIvA_chr17.dedups.pairs.gz
+
+pairix HiC-manipA_DIvA_chr17.dedups.pairs.gz 
+```
+
+```bash
+cooler cload pairix -p 12 chrom.size:1000 HiC-manipA_DIvA_chr17.dedups.pairs.gz HiC-manipA_DIvA_chr17.cool 
+```
+
+#### `.mcool` generation with `cooler zoomify`
+
+```bash
+cooler zoomify --balance -p 12 -r 2500000,1000000,500000,250000,100000,50000,25000,10000,5000,1000 HiC-manipA_DIvA_chr17.cool 
+```
+
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Hi-C file format conversion
+
+```bash
+hicConvertFormat -m HiC-manipA_DIvA_chr17.hic --inputFormat hic --outputFormat cool -o contact_map_manipA_DIvA.mcool --resolutions 0
+```
+
+```
+INFO:numexpr.utils:Note: NumExpr detected 48 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+INFO:numexpr.utils:NumExpr defaulting to 8 threads.
+INFO:hicexplorer.hicConvertFormat:Converting with hic2cool.
+##########################
+### hic2cool / convert ###
+##########################
+### Header info from hic
+... Chromosomes:  ['All', 'chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
+... Resolutions:  [2500000, 1000000, 500000, 250000, 100000, 50000, 25000, 10000, 5000, 1000]
+... Normalizations:  ['VC', 'VC_SQRT', 'KR', 'SCALE']
+... Genome:  OUT/chrom.size
+### Converting
+... Resolution 2500000 took: 0.04593014717102051 seconds.
+... Resolution 1000000 took: 0.05594468116760254 seconds.
+... Resolution 500000 took: 0.08322954177856445 seconds.
+... Resolution 250000 took: 0.17272639274597168 seconds.
+... Resolution 100000 took: 0.6181228160858154 seconds.
+... Resolution 50000 took: 1.4236094951629639 seconds.
+... Resolution 25000 took: 2.738147735595703 seconds.
+... Resolution 10000 took: 5.375180244445801 seconds.
+... Resolution 5000 took: 8.947916507720947 seconds.
+... Resolution 1000 took: 26.072087049484253 seconds.
+### Finished! Output written to: contact_map_manipA_DIvA_0.mcool
+... This file is higlass compatible.
+```
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Hi-C file format conversion
+
+```bash
+cooler zoomify --balance -p 12 -r 2500000,1000000,500000,250000,100000,50000,25000,10000 contact_map_manipA_DIvA_10000.cool
+```
+
+#### `r icons::icon_style(icons::fontawesome("exclamation-triangle", style = "solid"), scale = 1, fill = "red")` <span style="color:red">DOES NOT WORK.</span>
+
+```bash
+cooler zoomify --balance -p 12 -r 1000000,500000,100000,50000,10000 contact_map_manipA_DIvA_10000.cool
+```
+
+> `cooler` create lower resolution with higher resolution bins ; `hicexplorer` just export hic resolutions in mcool file.
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #f39c12")` NGS formats
+
+### Hi-C formats: `.hic`, `.mcool`, dense matrix ...
+
+### Genomics coordinates: `.bed`
+
+```bash
+head ens.db.v75.hg19.bed
+chr1	11868	14412	DDX11L1	0	+
+chr1	29553	31109	MIR1302-10	0	+
+chr1	52472	54936	OR4G4P	0	+
+chr1	62947	63887	OR4G11P	0	+
+chr1	69090	70008	OR4F5	0	+
+```
+
+### Genomics coordinates: `.bedpe`
+
+```bash
+head HiC-manipA_DIvA_chr17.dot_cooltools.bedpe  | cut -f1-6
+chrom1	start1	end1	chrom2	start2	end2
+chr17	1810000	1820000	chr17	2140000	2150000
+chr17	5490000	5500000	chr17	6310000	6320000
+chr17	19260000	19270000	chr17	19660000	19670000
+chr17	17250000	17260000	chr17	17470000	17480000
+chr17	7640000	7650000	chr17	7940000	7950000
+```
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #f39c12")` NGS formats
+
+### Genomics coverage: `.bedGraph`
+
+```bash
+head HiC-manipA_DIvA_chr17.eigen_juicer.bedgraph
+chr17	0	100000	-0.0034356864960089365
+chr17	100000	200000	-0.001945380736451832
+chr17	200000	300000	-6.578300780890366E-4
+chr17	300000	400000	-0.03520929281504355
+chr17	400000	500000	7.229300190553884E-4
+```
+
+> A `bigWig` (`.bw`) is a binary `.bedGraph`
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #f39c12")` Contacts vs distance
+
+
+> The strongest signal in a typical Hi-C map is the decay of contact frequency with genomic separation (also referred to as genomic distance).
+>
+> __Source__: https://cooltools.readthedocs.io/en/latest/notebooks/contacts_vs_distance.html
+
+.center[
+```{r out.width = '100%',echo=F}
+knitr::include_graphics("imgs/count_vs_distance_mitotic.svg")
+```
+#### `r Citep(bib, "naumova2013organization")`
+]
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #f39c12")` Contacts vs distance
+
+### `HiCExplorer`
+
+#### For the `chr17` subset
+
+```bash
+hicPlotDistVsCounts -m HiC-manipA_DIvA_chr17.mcool::/resolutions/100000 HiC-manipA_OHT_chr17.mcool::/resolutions/100000 -o counts_vs_dist_chr17_DIVA_OHT.png --labels 'DIVA' 'OHT' --maxdepth 20000000 --plotsize 5 4.2
+```
+
+#### Parameters: 
+
+* `-m`: input file (work with `.mcool`,`.cool` and `.h5`)
+  * To extract a specific resolution with `.mcool`: `myfile.mcool::/resolutions/100000`
+* `--maxdepth 20000000`:Maximum distance from diagonal to use.
+* `-o`: output file with format specified as : `.png`, `.pdf`
+* `--perchr`: Computes distance versus Hi-C counts for each chromosome.
+* `--chromosomeExclude`: Exclude the given list of chromosomes.
+* `--domains`: Bed file with domains coordinates: intra-domains instead of intra chromosomal counts.
+* `--outFileData`: If given, the data underlying the plots is saved on this file.
+
+> Note: Data is probably smoothed, so if you want raw data you can use `cooler expected-cis`.
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Genomic compartment (A/B)
+
+__Plaid pattern__: These plaid patterns reflect tendencies of chromosome regions to make more frequent contacts with regions of the same type: active regions have increased contact frequency with other active regions, and intactive regions tend to contact other inactive regions more frequently. ([Source](https://cooltools.readthedocs.io/en/latest/notebooks/compartments_and_saddles.html))
+
+.center[
+```{r out.width = '90%',echo=F}
+knitr::include_graphics("imgs/HiCImage_observed_vs_OE_vs_Pearson.svg")
+```
+]
+
+* __Pearson correlation__ from __O/E__ matrix allow to see compartmentalization.
+* __A__: Active (genes) chromatine associated with _euchromatin_ marks.
+* __B__: Inactive chromatine associated with _heterochromatin_ marks.
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Genomic compartment (A/B)
+
+### __Eigendecomposition__ of Hi-C matrix to obtain compartment profiles: 
+
+.center[
+```{r out.width = '60%',echo=F}
+knitr::include_graphics("imgs/eigenAB.svg")
+```
+]
+
+
+* Done by extracting first component of a __PCA__ on O/E Hi-C matrix.
+* Compartment profiles from tools:
+  * `eigs_cis` from `cooltools`.
+  * `hicPCA` from `HiCExplorer`.
+  * `eigenvector` from `juicertools`.
+
+---
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Genomic compartment (A/B)
+
+
+
+
+
+
+### `eigs_cis` from `cooltools`
+
+```bash
+cooltools eigs-cis --n-eigs 1 -o HiC-manipA_DIvA_chr17.eigen_cooltools --bigwig HiC-manipA_DIvA_chr17.mcool::/resolutions/100000
+```
+
+
+### `hicPCA` from `HiCExplorer`
+
+```bash
+hicPCA -m HiC-manipA_DIvA_chr17.mcool::/resolutions/100000 -we 1 -o HiC-manipA_DIvA_chr17.eigen_hicexplorer.bw -f bigwig
+```
+
+
+### `eigenvector` from `juicertools`
+
+```bash
+java -jar juicer_tools_1.22.01.jar eigenvector KR HiC-manipA_DIvA_chr17.hic chr17 BP 100000 -p HiC-manipA_DIvA_chr17.eigen_juicer.txt
+```
+
+will output only the values without coordinates, so we create them :
+
+```bash
+grep chr17 chrom.size > chr17.size
+bedtools makewindows -g chr17.size -w 100000 > HiC-manipA_DIvA_chr17.eigen_juicer.bins
+```
+
+```bash
+paste HiC-manipA_DIvA_chr17.eigen_juicer.bins HiC-manipA_DIvA_chr17.eigen_juicer.txt > HiC-manipA_DIvA_chr17.eigen_juicer.bedgraph
+```
+
+### Let see that on `Juicebox` !
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Studying compartmentalization strenght variation
+
+### Saddle-plots
+
+* Stratify genomic regions using `PC1` into percentiles of similar values.
+* Averaging (cis) interactions between groups from `O/E` values.
+
+.center[
+```{r out.width = '35%',echo=F}
+knitr::include_graphics("imgs/notebooks_compartments_and_saddles_28_1.png")
+```
+#### `saddleplot` function from `cooltools`
+]
+
+* `cooltools` with `saddle`.
+* `FAN-C` with `fanc compartments`.
+* By hand with `R`.
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Studying compartmentalization strenght variation
+
+### Saddle-plots
+
+#### `cooltools`
+
+```bash
+cooltools expected-cis -o HiC-manipA_DIvA_chr17.expected_cooltools -c 100000 HiC-manipA_DIvA_chr17.mcool::/resolutions/100000
+```
+
+```bash
+cooltools saddle -t cis -n 50 -o HiC-manipA_DIvA_chr17.saddle_cooltools --fig pdf HiC-manipA_DIvA_chr17.mcool::/resolutions/100000 HiC-manipA_DIvA_chr17.eigen_cooltools.cis.vecs.tsv::E1 HiC-manipA_DIvA_chr17.expected_cooltools --qrange 0.02 0.98
+```
+Parameters:
+
+* `-t`: Type of the contacts to aggregate cis | trans.
+* `-n`: number of bins.
+* `--fig` output file format (`pdf`).
+* `-o` : output prefix.
+* `--qrange`: Low and high values used for quantile bins.
+  * if `qrange`=(0.02, 0.98) the lower bin would start at the 2nd percentile and the upper bin would end at the 98th percentile of the genome-wide signal.
+
+---
+
+```{r,fig.align='center',fig.width=5,fig.height=4}
+require(tidyverse)
+require(reticulate)
+np <- import("numpy")
+
+npz1 <- np$load("../HiC-manipA_DIvA_chr17.saddle_cooltools.saddledump.npz")
+data_plot_npz <- npz1$f[["saddledata"]] %>% reshape2::melt()
+binedge <- enframe(npz1$f[["binedges"]])
+
+
+p1 <- data_plot_npz %>%
+  mutate(value = ifelse(value>2,2,value)) %>%
+  ggplot(aes(Var1,Var2,fill=value)) + geom_tile() + scale_fill_gradient2(low="blue",high="red",mid="white",midpoint=1,limits=c(0,2)) +coord_cartesian(expand=F)
+p2 <- binedge %>% ggplot(aes(x=name,y=value)) + geom_bar(stat = "identity") +coord_cartesian(expand=F)
+
+require(patchwork)
+p2 + p1 + plot_layout(nrow=2,heights = c(0.1,0.9))
+```
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Studying compartmentalization strenght variation
+
+### Saddle-plots
+
+#### FAN-C (not working)
+
+
+`fanc compartments -e fanc_example_1mb.ab_profile.png HiC-manipA_DIvA_chr17.hic@100kb fanc_example_1mb.ab`
+
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Topologically Associating Domains (TAD)
+
+.center[
+```{r out.width = '80%',echo=F}
+knitr::include_graphics("imgs/loop_tad_ctcf_ko1.svg")
+```
+#### `r Citep(bib, "chang2020tads")`
+]
+
+* TAD are composed of highly self-interacting _loci_:
+  * _loci_ inside a TAD interact with each other more frequently than _loci_ outside.
+* TAD form 100kb~1mb interacting domains along the diagonal.
+* Separated by insulated regions (CTCF binding site).
+
+---
+
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Topologically Associating Domains (TADs)
+
+### TAD boundaries measurement on Hi-C data
+
+__TAD boundaries__ can be measured by a TAD-separation score:
+* Look at cis interactions (left/right) for a bin using a running window of different sizes.
+* Different metrics can be used:
+  * directionality index (_DI_) `r Citep(bib, "dixon2012topological")`.
+  * insulation score `r Citep(bib, "crane2015condensin")`.
+    
+--
+
+.center[
+```{r out.width = '40%',echo=F}
+knitr::include_graphics("imgs/insulation_score_computation.png")
+```
+
+]
+
+---
+
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Topologically Associating Domains (TADs)
+
+### TAD boundaries measurement on Hi-C data
+
+__TAD boundaries__ can be measured by a TAD-separation score:
+* Look at cis interactions (left/right) for a bin using a running window of different sizes.
+* Different metrics can be used:
+  * directionality index (_DI_) `r Citep(bib, "dixon2012topological")`.
+  * insulation score `r Citep(bib, "crane2015condensin")`.
+    
+
+
+.center[
+```{r out.width = '80%',echo=F}
+knitr::include_graphics("imgs/HiC_view_insulation.svg")
+```
+
+]
+
+---
+
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Topologically Associating Domains (TADs)
+
+### TAD detection (TAD calling)
+
+TAD callers:
+
+* [TopDom](https://github.com/HenrikBengtsson/TopDom) (own score like _DI_).
+* [TADtool](https://github.com/vaquerizaslab/tadtool) (_DI_ and insulation).
+* [HiCExplorer](https://github.com/deeptools/HiCExplorer) (insulation).
+* [cooltools](https://github.com/open2c/cooltools) (insulation).
+* [TADreg](https://github.com/raphaelmourad/TADreg) (Beta from regression).
+* [`Arrowhead`](https://github.com/aidenlab/juicer/wiki/Arrowhead) matrix transformation (`juicer`) .
+
+--
+
+.center[
+```{r out.width = '55%',echo=F}
+knitr::include_graphics("imgs/tad_method_comparison.svg")
+```
+
+]
+
+
+---
+
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Topologically Associating Domains (TADs)
+
+### TAD detection (TAD calling)
+
+#### `arrowhead`
+
+```bash
+java -jar juicer_tools_1.22.01.jar arrowhead -r 5000 -k KR --threads 12 HiC-manipA_DIvA_chr17.hic HiC-manipA_DIvA_chr17.arrowhead_juicer
+```
+
+Parameters:
+
+* `-r` which resolution I want to use to detect TADs : try : 5000,10000,25000,100000
+* `-k` which normalization use to compute TAD (use `KR`).
+
+---
+
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Topologically Associating Domains (TADs)
+
+### TAD detection (TAD calling)
+
+#### `hicexplorer`
+
+```bash
+  hicFindTADs -m HiC-manipA_DIvA_chr17.mcool::/resolutions/50000 --outPrefix manipA_DIvA_chr17.50kb.insulation_hicexplorer --minDepth 150000 --maxDepth 300000 --thresholdComparisons 0.05 --delta 0.01 --correctForMultipleTesting fdr -p 24
+```
+
+Parameters:
+
+* `--minDepth` and `--maxDepth`: Minimum/maximum window length (in bp) to be considered to the left and to the right of each Hi-C bin.
+* `--thresholdComparisons`: P-value threshold.
+* `--correctForMultipleTesting`: which correction use (`fdr`).
+* `--delta`: Compute a difference between a bin and his neighbors. Higher delta threshold values produce more conservative boundary estimations.
+
+#### Conversion from `bed` to `bedpe`
+
+```bash
+awk -v FS='\t' -v OFS='\t' '{print $1,$2,$3,$1,$2,$3,$4,$5,$6,$7,$8,$9}' manipA_DIvA_chr17.50kb.insulation_hicexplorer_domains.bed > manipA_DIvA_chr17.50kb.insulation_hicexplorer_domains.bedpe
+```
+
+
+
+---
+
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` Topologically Associating Domains (TADs)
+
+### TAD detection (TAD calling)
+
+#### `cooltools`
+
+```bash
+coltools insulation -p 24 -o HiC-manipA_DIvA_chr17.insulation_cooltools.bedpe --bigwig HiC-manipA_DIvA_chr17.mcool::/resolutions/10000 10000 50000 100000
+```
+
+
+```bash
+awk -v FS='\t' -v OFS='\t' 'BEGIN{print "#chr1\tx1\tx2\tchr2\tx2\ty2\tname\tscore\tstrand1\tstrand2"}; $NF == "True" {print $1,$2,$3,$1,$2,$3,".",".",".","."}' HiC-manipA_DIvA_chr17.insulation_cooltools.bedpe > HiC-manipA_DIvA_chr17.insulation_cooltools_100000.bedpe
+awk -v FS='\t' -v OFS='\t' 'BEGIN{print "#chr1\tx1\tx2\tchr2\tx2\ty2\tname\tscore\tstrand1\tstrand2"}; $NF-1 == "True" {print $1,$2,$3,$1,$2,$3,".",".",".","."}' HiC-manipA_DIvA_chr17.insulation_cooltools.bedpe > HiC-manipA_DIvA_chr17.insulation_cooltools_50000.bedpe
+awk -v FS='\t' -v OFS='\t' 'BEGIN{print "#chr1\tx1\tx2\tchr2\tx2\ty2\tname\tscore\tstrand1\tstrand2"}; $NF-2 == "True" {print $1,$2,$3,$1,$2,$3,".",".",".","."}' HiC-manipA_DIvA_chr17.insulation_cooltools.bedpe > HiC-manipA_DIvA_chr17.insulation_cooltools_10000.bedpe
+```
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` _Loop extrusion_ model
+
+.center[
+```{r out.width = '100%',echo=F,fig.cap="Mirny, L. A. (2021). Cells use loop extrusion to weave and tie the genome."}
+knitr::include_graphics("imgs/loop_model_leonid_1bis.svg")
+```
+]
+
+* _Loop extrusion_ promote contact between sequence that control gene expression (__enhancers__ & __promoters__).
+* When a motor reels in a section of DNA that is bound to a CTCF protein, it stalls.
+* The other motor can continue reeling, allowing the DNA to be scanned for regulatory sequences.
+
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#27ae60")` _Loop extrusion_ model
+
+.center[
+```{r out.width = '80%',echo=F,fig.cap="(Iain F. Davidson & Jan-Michael Peters, Nat Rev Mol Cell Biol (2021))."}
+knitr::include_graphics("imgs/stripes.svg")
+```
+]
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#e74c3c")` Loop calling
+
+.center[
+```{r out.width = '80%',echo=F}
+knitr::include_graphics("imgs/loop_call.svg")
+```
+#### `r Citep(bib, "rao20143d")`
+]
+
+* Implemented in [`HiCCUPs`](https://github.com/aidenlab/juicer/wiki/HiCCUPS).
+* Other implementations are available: `cooltools.api.dotfinder`, `hicDetectLoops`.
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#e74c3c")` Loop calling
+
+### `cooltools.api.dotfinder`
+
+`dotfinder` search for loop on O/E matrix because loop are "unexpected" interactions based on distance only
+
+```bash
+cooltools expected-cis -o HiC-manipA_DIvA_chr17.expected_10kb_cooltools HiC-manipA_DIvA_chr17.mcool::/resolutions/10000
+```
+
+```bash
+cooltools dots -p 24 HiC-manipA_DIvA_chr17.mcool::/resolutions/10000 HiC-manipA_DIvA_chr17.expected_10kb_cooltools -o HiC-manipA_DIvA_chr17.dot_cooltools.bedpe
+```
+
+
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = "#e74c3c")` Loop calling
+
+### `hicexplorer`
+
+
+```bash
+hicDetectLoops -m HiC-manipA_DIvA_chr17.mcool::/resolutions/10000 -o HiC-manipA_DIvA_chr17.dot_hicexplorer.bedpe --maxLoopDistance 2000000 --windowSize 10 --peakWidth 6 --pValuePreselection 0.05 --pValue 0.05 --threads 24
+```
+
+Parameters:
+
+* `--peakWidth`: The width of the peak region in bins.
+* `--windowSize`: All values from this region are tested against the peak region for significant difference.
+* `--maxLoopDistance`: Maximum genomic distance of a loop.
+
+
+> No results found for me on `chr17`
+
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Aggregate analyses (APA)
+
+### Measure enrichment of Hi-C signal for specifics features (loop, TAD boundaries, ChIP-seq peaks, ...)
+
+.center[
+```{r out.width = '80%',echo=F}
+knitr::include_graphics("imgs/APA.svg")
+```
+#### `pileup` function from `cooltools`
+]
+
+Many tools offer APA implementation :
+* `FAN-C` with `fanc aggregate inter.hic TADs.bed` (`BED`/`BEDPE`)
+* `cooltools` with `pileup`  (`BED`/`BEDPE`)
+* `juicer-tool` with `apa inter.hic all_loops.txt` (`BEDPE`)
+* `HiCExplorer` with `hicAggregateContacts`: (`BED`)
+  `hicAggregateContacts --matrix inter.h5 --BED TADs.bed`
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Aggregate analyses (APA)
+
+### `apa` from `juicertools`
+
+```bash
+java -jar juicer_tools_1.22.01.jar apa -r 10000 -k KR -w 10 -c chr17 HiC-manipA_DIvA_chr17.hic HiC-manipA_DIvA_chr17.dot_cooltools.bedpe HiC-manipA_DIvA_chr17.apa_juicertools --threads 1
+```
+
+Parameters:
+
+* `-r` which resolution I want to use to make my apa.
+* `-k` which normalization use to compute TAD (use `KR`).
+* `--threads 1`: must be precised if not will bug.
+* `-w` number of bins around the center. 
+* `-c` which chromosome, can be multiple: `-c chr17,chr18`.
+
+> `apa` cannot be run on O/E matricex, so you may see the diagonal.
+
+```{r out.width = "10%", fig.align = "center",echo=F}
+knitr::include_graphics("imgs/APA.png")
+```
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Aggregate analyses (APA)
+
+### `pileup` from `cooltools`
+
+```bash
+cooltools pileup HiC-manipA_DIvA_chr17.mcool::/resolutions/10000 HiC-manipA_DIvA_chr17.dot_cooltools.bedpe --flank 300000 --expected HiC-manipA_DIvA_chr17.expected_10kb_cooltools -o HiC-manipA_DIvA_chr17.apa_cooltools.npz --aggregate mean --features-format BEDPE
+```
+
+---
+
+```{r,fig.align='center',fig.width=5,fig.height=4}
+
+require(tidyverse)
+require(reticulate)
+np <- import("numpy")
+
+npz1 <- np$load("../HiC-manipA_DIvA_chr17.apa_cooltools.npz")
+data_plot_npz <- npz1$f[["pileup"]] %>% reshape2::melt()
+
+p1 <- data_plot_npz %>%
+  mutate(logval=log2(value)) %>% 
+  mutate(logval = ifelse(logval>1,1,logval)) %>%
+  ggplot(aes(Var1,Var2,fill=logval)) + geom_tile() + scale_fill_gradient2(low="blue",high="red",mid="white",midpoint=0,limits=c(-1,1)) +coord_cartesian(expand=F)
+p1
+```
+
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Aggregate analyses (APA)
+
+### `pileup` from `cooltools` for `TADs`
+
+```bash
+cooltools pileup HiC-manipA_DIvA_chr17.mcool::/resolutions/10000 manipA_DIvA_chr17.50kb.insulation_hicexplorer_boundaries.bed --flank 1000000 --expected HiC-manipA_DIvA_chr17.expected_10kb_cooltools -o HiC-manipA_DIvA_chr17.TAD_apa_cooltools.npz --aggregate mean --features-format BED
+```
+
+---
+
+```{r,fig.align='center',fig.width=5,fig.height=4}
+require(tidyverse)
+require(reticulate)
+np <- import("numpy")
+
+npz1 <- np$load("../HiC-manipA_DIvA_chr17.TAD_apa_cooltools.npz")
+data_plot_npz <- npz1$f[["pileup"]] %>% reshape2::melt()
+
+p1 <- data_plot_npz %>%
+  mutate(logval=log2(value)) %>% 
+  mutate(logval = ifelse(logval>1,1,logval)) %>%
+  ggplot(aes(Var1,Var2,fill=logval)) + geom_tile() + scale_fill_gradient2(low="blue",high="red",mid="white",midpoint=0,limits=c(-1,1)) +coord_cartesian(expand=F)
+p1
+```
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Aggregate analyses (APA)
+
+### `aggregate` from `fanc`
+
+```bash
+fanc aggregate -p HiC-manipA_DIvA_chr17.apa_fanc.pdf -m HiC-manipA_DIvA_chr17.apa_fanc.txt --expected-norm --log --pixels 60 HiC-manipA_DIvA_chr17.hic@10kb HiC-manipA_DIvA_chr17.dot_cooltools_nohead.bedpe HiC-manipA_DIvA_chr17.apa_fanc.agg
+```
+
+Parameters:
+
+* `--expected-norm` and `--log` will plot Log2 ratio between observed/expected interaction.
+* `--pixels`: number of pixels to plot around the location.
+* `-p`: I want a plot.
+* `-m`: I want the output as a text matrix (for `R` plot).
+* `HiC-manipA_DIvA_chr17.hic@10kb`: in fanc, the resolution can be specified with `myfile.hic@10kb`
+
+---
+
+```{r,fig.align='center',fig.width=5,fig.height=4}
+data_plot <- "../HiC-manipA_DIvA_chr17.apa_fanc.txt" %>% read.delim(header=F,sep=" ") 
+colnames(data_plot) <- rownames(data_plot) <- 1:ncol(data_plot)
+data_plot <- data_plot %>% as.matrix() %>% reshape2::melt()
+
+
+p2 <- data_plot %>%
+  mutate(value = ifelse(value>1,1,value)) %>%
+  ggplot(aes(Var1,Var2,fill=value)) + geom_tile() + scale_fill_gradient2(low="blue",high="red",mid="white",midpoint=0,limits=c(-1,1)) +coord_cartesian(expand=F)
+
+p2
+```
+
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Aggregate analyses (APA)
+
+### `hicAggregateContacts` from `hicexplorer`
+
+```bash
+hicAggregateContacts --matrix HiC-manipA_DIvA_chr17.mcool::/resolutions/100000 --BED manipA_DIvA_chr17.100kb.insulation_hicexplorer_boundaries.bed --outFileName manipA_DIvA_chr17.100kb.insulation_hicexplorer_boundaries --numberOfBins 30 --operationType mean --transform obs/exp --mode intra-chr
+```
+
+Parameters: 
+
+* `--BED`: Interactions between regions in this BED file are plotted.
+* `--BED2`: can be used to compute interactions between BED/BED2.
+* `--mode` intra/inter/all combination of interactions are plotted
+* `--numberOfBins`: Number of bins to include in the submatrix.
+* `--operationType`: Type of the operation to be applied to summerize the submatrices into a single matrix.
+* `--transform`: Type of transformation for the matrix. `total-counts` for observed matrix and `obs/exp` to get observed over expected. 
+
+---
+
+## `r icons::icon_style(icons::fontawesome("laptop-code", style = "solid"), scale = 1, fill = " #e74c3c")` Aggregate analyses (APA)
+
+### `hicAggregateContacts` from `hicexplorer`
+
+
+```bash
+hicAggregateContacts --matrix HiC-manipA_OHT.dedup.mcool::/resolutions/100000 --BED DSB.bed --outFileName DSB_interactions.png --numberOfBins 10 --operationType mean --transform obs/exp --mode all
+```
+
+```{r out.width = "35%", fig.align = "center",echo=F}
+knitr::include_graphics("imgs/DSB_interactions.png")
+```
 
 ---
 
